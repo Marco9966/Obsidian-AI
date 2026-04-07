@@ -1,0 +1,5 @@
+{
+  "name": "Obsidian AI Assistant",
+  "description": "An AI assistant connected to your Obsidian vault for world-building, character creation, and note management.",
+  "requestFramePermissions": []
+}
