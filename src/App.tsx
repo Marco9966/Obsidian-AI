@@ -5,19 +5,62 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { vault } from './lib/obsidian';
-import { sendMessage, Message, resetChat } from './lib/gemini';
-import { FolderOpen, Send, FileText, Bot, User, Loader2 } from 'lucide-react';
+import { sendMessage, Message, ChatSession } from './lib/gemini';
+import { FolderOpen, Send, FileText, Bot, User, Loader2, Plus, MessageSquare, Trash2 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [templates, setTemplates] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>([]);
+  
+  const [chats, setChats] = useState<ChatSession[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Autocomplete state
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [autocompleteFilter, setAutocompleteFilter] = useState('');
+  const [autocompleteIndex, setAutocompleteIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const activeChat = chats.find(c => c.id === activeChatId);
+
+  // Load persisted vault and chats on mount
+  useEffect(() => {
+    const init = async () => {
+      const success = await vault.loadPersisted();
+      if (success) {
+        setIsConnected(true);
+        setTemplates(Object.keys(vault.templates));
+      }
+
+      const savedChats = localStorage.getItem('obsidian-ai-chats');
+      if (savedChats) {
+        try {
+          const parsed = JSON.parse(savedChats);
+          setChats(parsed);
+          if (parsed.length > 0) {
+            setActiveChatId(parsed[0].id);
+          }
+        } catch (e) {
+          console.error("Failed to parse saved chats", e);
+        }
+      }
+    };
+    init();
+  }, []);
+
+  // Save chats to local storage whenever they change
+  useEffect(() => {
+    localStorage.setItem('obsidian-ai-chats', JSON.stringify(chats));
+  }, [chats]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -25,49 +68,161 @@ export default function App() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [activeChat?.messages]);
 
   const handleConnect = async () => {
     const success = await vault.connect();
     if (success) {
       setIsConnected(true);
       setTemplates(Object.keys(vault.templates));
-      resetChat();
-      setMessages([{ role: 'model', text: 'Vault connected! How can I help you build your world today?' }]);
+      if (chats.length === 0) {
+        createNewChat();
+      }
     }
   };
 
+  const createNewChat = () => {
+    const newChat: ChatSession = {
+      id: uuidv4(),
+      title: 'New Chat',
+      messages: [{ role: 'model', text: 'Vault connected! How can I help you build your world today?' }],
+      history: []
+    };
+    setChats(prev => [newChat, ...prev]);
+    setActiveChatId(newChat.id);
+  };
+
+  const deleteChat = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setChats(prev => prev.filter(c => c.id !== id));
+    if (activeChatId === id) {
+      setActiveChatId(chats.find(c => c.id !== id)?.id || null);
+    }
+  };
+
+  const updateActiveChat = (updates: Partial<ChatSession>) => {
+    setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, ...updates } : c));
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !activeChatId || !activeChat) return;
     
     const userText = input.trim();
     setInput('');
     setIsLoading(true);
 
-    // Optimistically add user message
-    setMessages(prev => [...prev, { role: 'user', text: userText }]);
+    // Update title if it's the first user message
+    if (activeChat.messages.length === 1 && activeChat.title === 'New Chat') {
+      updateActiveChat({ title: userText.slice(0, 30) + (userText.length > 30 ? '...' : '') });
+    }
+
+    const newMessages = [...activeChat.messages, { role: 'user' as const, text: userText }];
+    updateActiveChat({ messages: newMessages });
 
     let currentModelMessageIndex = -1;
 
-    await sendMessage(userText, selectedTemplate || null, (msg) => {
-      setMessages(prev => {
-        const newMessages = [...prev];
-        if (msg.role === 'user') {
-          // Already added optimistically
-          return newMessages;
-        }
+    const result = await sendMessage(userText, selectedTemplate || null, activeChat.history, (msg) => {
+      setChats(prev => prev.map(c => {
+        if (c.id !== activeChatId) return c;
+        
+        const updatedMessages = [...c.messages];
+        if (msg.role === 'user') return c; // Already added optimistically
         
         if (currentModelMessageIndex === -1) {
-          currentModelMessageIndex = newMessages.length;
-          newMessages.push(msg);
+          currentModelMessageIndex = updatedMessages.length;
+          updatedMessages.push(msg);
         } else {
-          newMessages[currentModelMessageIndex] = msg;
+          updatedMessages[currentModelMessageIndex] = msg;
         }
-        return newMessages;
-      });
+        return { ...c, messages: updatedMessages };
+      }));
     });
 
+    updateActiveChat({ history: result.history });
     setIsLoading(false);
+  };
+
+  // Autocomplete logic
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+
+    // Check for quotes
+    const cursorPosition = e.target.selectionStart;
+    const textBeforeCursor = val.slice(0, cursorPosition);
+    
+    // Match the last quote that isn't closed before the cursor
+    const match = textBeforeCursor.match(/"([^"]*)$/);
+    
+    if (match) {
+      setShowAutocomplete(true);
+      setAutocompleteFilter(match[1].toLowerCase());
+      setAutocompleteIndex(0);
+    } else {
+      setShowAutocomplete(false);
+    }
+
+    // Auto-resize
+    e.target.style.height = 'auto';
+    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+  };
+
+  const filteredNotes = vault.files
+    .map(f => f.split('/').pop()?.replace('.md', '') || f)
+    .filter(name => name.toLowerCase().includes(autocompleteFilter))
+    .slice(0, 5);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showAutocomplete && filteredNotes.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setAutocompleteIndex(prev => (prev + 1) % filteredNotes.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setAutocompleteIndex(prev => (prev - 1 + filteredNotes.length) % filteredNotes.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertAutocomplete(filteredNotes[autocompleteIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowAutocomplete(false);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey && !showAutocomplete) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const insertAutocomplete = (noteName: string) => {
+    if (!textareaRef.current) return;
+    const cursorPosition = textareaRef.current.selectionStart;
+    const textBeforeCursor = input.slice(0, cursorPosition);
+    const textAfterCursor = input.slice(cursorPosition);
+    
+    const lastQuoteIndex = textBeforeCursor.lastIndexOf('"');
+    if (lastQuoteIndex !== -1) {
+      const newTextBefore = textBeforeCursor.slice(0, lastQuoteIndex) + `"${noteName}"`;
+      setInput(newTextBefore + textAfterCursor);
+      setShowAutocomplete(false);
+      
+      // Reset height
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(newTextBefore.length, newTextBefore.length);
+        }
+      }, 0);
+    }
   };
 
   return (
@@ -81,7 +236,7 @@ export default function App() {
           </h1>
         </div>
         
-        <div className="p-4 flex-1 overflow-y-auto">
+        <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-6">
           {!isConnected ? (
             <div className="text-center mt-10">
               <FolderOpen className="mx-auto text-gray-400 mb-4" size={48} />
@@ -95,7 +250,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="space-y-6">
+            <>
               <div>
                 <div className="flex items-center gap-2 text-green-600 mb-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
@@ -119,26 +274,56 @@ export default function App() {
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-500 mt-2">
-                  Select a template to guide the AI's next creation.
-                </p>
               </div>
-            </div>
+
+              <div className="flex-1 flex flex-col">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Chats</label>
+                  <button onClick={createNewChat} className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50">
+                    <Plus size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1">
+                  {chats.map(chat => (
+                    <div 
+                      key={chat.id}
+                      onClick={() => setActiveChatId(chat.id)}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between group cursor-pointer ${activeChatId === chat.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}
+                    >
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <MessageSquare size={14} className="flex-shrink-0" />
+                        <span className="truncate">{chat.title}</span>
+                      </div>
+                      <button 
+                        onClick={(e) => deleteChat(chat.id, e)}
+                        className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-gray-50">
+      <div className="flex-1 flex flex-col bg-gray-50 relative">
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {!isConnected ? (
             <div className="h-full flex items-center justify-center text-gray-400">
               Please connect your vault to start chatting.
             </div>
+          ) : !activeChat ? (
+            <div className="h-full flex items-center justify-center text-gray-400">
+              Select or create a chat to begin.
+            </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-6">
-              {messages.map((msg, idx) => (
+              {activeChat.messages.map((msg, idx) => (
                 <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'model' && (
                     <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-1">
@@ -182,31 +367,38 @@ export default function App() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-white border-t border-gray-200">
+        <div className="p-4 bg-white border-t border-gray-200 relative">
           <div className="max-w-3xl mx-auto relative">
+            
+            {/* Autocomplete Dropdown */}
+            {showAutocomplete && filteredNotes.length > 0 && (
+              <div className="absolute bottom-full mb-2 left-0 w-64 bg-white border border-gray-200 shadow-lg rounded-lg overflow-hidden z-10">
+                {filteredNotes.map((note, idx) => (
+                  <div 
+                    key={note}
+                    onClick={() => insertAutocomplete(note)}
+                    className={`px-4 py-2 text-sm cursor-pointer ${idx === autocompleteIndex ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                  >
+                    {note}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <textarea
+              ref={textareaRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder={isConnected ? "Describe what you want to create or ask a question..." : "Connect vault to type..."}
-              disabled={!isConnected || isLoading}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder={isConnected ? 'Type " to mention a note...' : "Connect vault to type..."}
+              disabled={!isConnected || isLoading || !activeChatId}
               className="w-full border border-gray-300 rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:bg-gray-50 disabled:text-gray-400"
               rows={1}
               style={{ minHeight: '52px', maxHeight: '200px' }}
-              onInput={(e) => {
-                const target = e.target as HTMLTextAreaElement;
-                target.style.height = 'auto';
-                target.style.height = `${Math.min(target.scrollHeight, 200)}px`;
-              }}
             />
             <button
               onClick={handleSend}
-              disabled={!isConnected || !input.trim() || isLoading}
+              disabled={!isConnected || !input.trim() || isLoading || !activeChatId}
               className="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
               <Send size={18} />
@@ -214,7 +406,7 @@ export default function App() {
           </div>
           <div className="max-w-3xl mx-auto mt-2 text-center">
             <p className="text-xs text-gray-400">
-              Press Enter to send, Shift+Enter for new line. The AI can read and write to your Obsidian vault.
+              Press Enter to send, Shift+Enter for new line. Type " to autocomplete note names.
             </p>
           </div>
         </div>

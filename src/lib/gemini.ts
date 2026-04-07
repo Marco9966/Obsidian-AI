@@ -42,17 +42,19 @@ export type Message = {
   text: string;
 };
 
-let chatHistory: any[] = [];
-
-export function resetChat() {
-  chatHistory = [];
-}
+export type ChatSession = {
+  id: string;
+  title: string;
+  messages: Message[];
+  history: any[];
+};
 
 export async function sendMessage(
   userText: string, 
   selectedTemplate: string | null,
+  history: any[],
   onUpdate: (msg: Message) => void
-) {
+): Promise<{ history: any[], error?: string }> {
   
   let systemInstruction = `You are an expert Obsidian vault manager and world-building assistant.
 You have full access to the user's Obsidian vault.
@@ -84,13 +86,14 @@ ${vault.files.join('\n')}
     prompt = `[User selected primary template: ${selectedTemplate}]\n\n${userText}`;
   }
 
-  chatHistory.push({ role: 'user', parts: [{ text: prompt }] });
+  const currentHistory = [...history];
+  currentHistory.push({ role: 'user', parts: [{ text: prompt }] });
   onUpdate({ role: 'user', text: userText });
 
   try {
     let response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: chatHistory,
+      contents: currentHistory,
       config: {
         systemInstruction,
         tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
@@ -102,7 +105,9 @@ ${vault.files.join('\n')}
     let currentModelMessage: Message = { role: 'model', text: modelResponseText };
     onUpdate(currentModelMessage);
 
-    chatHistory.push(response.candidates![0].content);
+    if (response.candidates && response.candidates.length > 0 && response.candidates[0].content) {
+      currentHistory.push(response.candidates[0].content);
+    }
 
     while (response.functionCalls && response.functionCalls.length > 0) {
       const functionResponses = [];
@@ -137,11 +142,11 @@ ${vault.files.join('\n')}
         }
       }
 
-      chatHistory.push({ role: 'user', parts: functionResponses });
+      currentHistory.push({ role: 'user', parts: functionResponses });
 
       response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: chatHistory,
+        contents: currentHistory,
         config: {
           systemInstruction,
           tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
@@ -155,10 +160,16 @@ ${vault.files.join('\n')}
         onUpdate({ ...currentModelMessage });
       }
       
-      chatHistory.push(response.candidates![0].content);
+      if (response.candidates && response.candidates.length > 0 && response.candidates[0].content) {
+        currentHistory.push(response.candidates[0].content);
+      }
     }
-  } catch (error) {
+    
+    return { history: currentHistory };
+  } catch (error: any) {
     console.error("Error generating content:", error);
-    onUpdate({ role: 'model', text: "Sorry, an error occurred while processing your request." });
+    const errorMessage = error?.message || String(error);
+    onUpdate({ role: 'model', text: `Sorry, an error occurred while processing your request:\n\n\`\`\`\n${errorMessage}\n\`\`\`` });
+    return { history: currentHistory, error: errorMessage };
   }
 }

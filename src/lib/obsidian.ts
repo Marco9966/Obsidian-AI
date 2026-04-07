@@ -1,3 +1,5 @@
+import { get, set } from 'idb-keyval';
+
 export class ObsidianVault {
   dirHandle: FileSystemDirectoryHandle | null = null;
   templates: Record<string, string> = {};
@@ -6,12 +8,44 @@ export class ObsidianVault {
   async connect() {
     try {
       this.dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      await set('obsidian-vault-handle', this.dirHandle);
       await this.refresh();
       return true;
     } catch (e) {
       console.error(e);
       return false;
     }
+  }
+
+  async loadPersisted() {
+    try {
+      const handle = await get('obsidian-vault-handle');
+      if (handle) {
+        const permission = await this.verifyPermission(handle, true);
+        if (permission) {
+          this.dirHandle = handle as FileSystemDirectoryHandle;
+          await this.refresh();
+          return true;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load persisted handle:", e);
+    }
+    return false;
+  }
+
+  async verifyPermission(fileHandle: FileSystemHandle, readWrite: boolean) {
+    const options: FileSystemHandlePermissionDescriptor = {};
+    if (readWrite) {
+      options.mode = 'readwrite';
+    }
+    if ((await fileHandle.queryPermission(options)) === 'granted') {
+      return true;
+    }
+    if ((await fileHandle.requestPermission(options)) === 'granted') {
+      return true;
+    }
+    return false;
   }
 
   async refresh() {
