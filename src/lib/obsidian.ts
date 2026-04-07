@@ -117,6 +117,21 @@ export class ObsidianVault {
       return false;
     }
   }
+
+  async createFolder(path: string): Promise<boolean> {
+    if (!this.dirHandle) return false;
+    try {
+      const parts = path.split('/').filter(p => p.trim() !== '');
+      let currentHandle = this.dirHandle;
+      for (const part of parts) {
+        currentHandle = await currentHandle.getDirectoryHandle(part, { create: true });
+      }
+      return true;
+    } catch (e) {
+      console.error(`Error creating folder ${path}:`, e);
+      return false;
+    }
+  }
 }
 
 export const vault = new ObsidianVault();

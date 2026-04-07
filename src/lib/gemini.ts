@@ -37,6 +37,21 @@ const readNoteDeclaration = {
   }
 };
 
+const createFolderDeclaration = {
+  name: "createFolder",
+  description: "Create a new folder (directory) in the Obsidian vault to organize notes.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      path: {
+        type: Type.STRING,
+        description: "The folder path relative to the vault root, e.g., '01_Personagens/NPCs'"
+      }
+    },
+    required: ["path"]
+  }
+};
+
 export type Message = {
   role: 'user' | 'model';
   text: string;
@@ -157,6 +172,7 @@ O vault possui a seguinte estrutura de pastas para organização:
 - 03_Organizações
 - 04_Eventos
 
+Você pode criar novas pastas para organizar melhor as notas usando a ferramenta \`createFolder\`.
 Sempre coloque as novas notas na pasta correta baseada no seu tipo.
 
 Aqui está a lista atual de arquivos no vault:
@@ -190,7 +206,7 @@ ${vault.files.join('\n')}
   try {
     let response = await generateWithFallback(currentHistory, {
       systemInstruction,
-      tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
+      tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration] }],
       temperature: 0.7,
     }, onUpdate, { role: 'model', text: '' });
 
@@ -232,6 +248,19 @@ ${vault.files.join('\n')}
               response: { content: content !== null ? content : "File not found" }
             }
           });
+        } else if (call.name === 'createFolder') {
+          const path = call.args.path as string;
+          const success = await vault.createFolder(path);
+          
+          currentModelMessage.text += `\n\n*Pasta criada: \`${path}\`*`;
+          onUpdate({ ...currentModelMessage });
+
+          functionResponses.push({
+            functionResponse: {
+              name: call.name,
+              response: { result: success ? "Success" : "Failed to create folder" }
+            }
+          });
         }
       }
 
@@ -239,7 +268,7 @@ ${vault.files.join('\n')}
 
       response = await generateWithFallback(currentHistory, {
         systemInstruction,
-        tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
+        tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration] }],
         temperature: 0.7,
       }, onUpdate, currentModelMessage);
 
