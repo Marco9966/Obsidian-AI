@@ -52,6 +52,35 @@ const createFolderDeclaration = {
   }
 };
 
+const moveFileDeclaration = {
+  name: "moveFile",
+  description: "Move or rename a file in the Obsidian vault.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      oldPath: { type: Type.STRING, description: "The current file path, e.g., '01_Personagens/John.md'" },
+      newPath: { type: Type.STRING, description: "The new file path, e.g., '01_Personagens/NPCs/John Doe.md'" }
+    },
+    required: ["oldPath", "newPath"]
+  }
+};
+
+const deleteFilesDeclaration = {
+  name: "deleteFiles",
+  description: "Request to delete one or more files from the Obsidian vault. The user will be prompted to confirm the deletion.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      paths: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "An array of file paths to delete"
+      }
+    },
+    required: ["paths"]
+  }
+};
+
 export type Message = {
   role: 'user' | 'model';
   text: string;
@@ -129,7 +158,8 @@ export async function sendMessage(
   image: { data: string, mimeType: string } | null,
   selectedTemplate: string | null,
   history: any[],
-  onUpdate: (msg: Message) => void
+  onUpdate: (msg: Message) => void,
+  onRequestDelete: (paths: string[]) => Promise<string[]>
 ): Promise<{ history: any[], error?: string }> {
   
   let systemInstruction = `Você é um assistente especialista em Obsidian e criação de mundos (world-building).
@@ -173,6 +203,8 @@ O vault possui a seguinte estrutura de pastas para organização:
 - 04_Eventos
 
 Você pode criar novas pastas para organizar melhor as notas usando a ferramenta \`createFolder\`.
+Você pode mover ou renomear arquivos usando a ferramenta \`moveFile\`.
+Você pode deletar arquivos usando a ferramenta \`deleteFiles\` (o usuário precisará confirmar a exclusão).
 Sempre coloque as novas notas na pasta correta baseada no seu tipo.
 
 Aqui está a lista atual de arquivos no vault:
@@ -206,7 +238,7 @@ ${vault.files.join('\n')}
   try {
     let response = await generateWithFallback(currentHistory, {
       systemInstruction,
-      tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration] }],
+      tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration, moveFileDeclaration, deleteFilesDeclaration] }],
       temperature: 0.7,
     }, onUpdate, { role: 'model', text: '' });
 
@@ -261,6 +293,45 @@ ${vault.files.join('\n')}
               response: { result: success ? "Success" : "Failed to create folder" }
             }
           });
+        } else if (call.name === 'moveFile') {
+          const oldPath = call.args.oldPath as string;
+          const newPath = call.args.newPath as string;
+          const success = await vault.moveFile(oldPath, newPath);
+          
+          currentModelMessage.text += `\n\n*Arquivo movido: \`${oldPath}\` -> \`${newPath}\`*`;
+          onUpdate({ ...currentModelMessage });
+
+          functionResponses.push({
+            functionResponse: {
+              name: call.name,
+              response: { result: success ? "Success" : "Failed to move file" }
+            }
+          });
+        } else if (call.name === 'deleteFiles') {
+          const paths = call.args.paths as string[];
+          const approvedPaths = await onRequestDelete(paths);
+          
+          const results: Record<string, string> = {};
+          for (const path of paths) {
+            if (approvedPaths.includes(path)) {
+              const success = await vault.deleteFile(path);
+              results[path] = success ? "Deleted" : "Failed to delete";
+              if (success) {
+                currentModelMessage.text += `\n\n*Arquivo deletado: \`${path}\`*`;
+              }
+            } else {
+              results[path] = "User denied deletion";
+            }
+          }
+          
+          onUpdate({ ...currentModelMessage });
+
+          functionResponses.push({
+            functionResponse: {
+              name: call.name,
+              response: { results }
+            }
+          });
         }
       }
 
@@ -268,7 +339,7 @@ ${vault.files.join('\n')}
 
       response = await generateWithFallback(currentHistory, {
         systemInstruction,
-        tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration] }],
+        tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration, moveFileDeclaration, deleteFilesDeclaration] }],
         temperature: 0.7,
       }, onUpdate, currentModelMessage);
 

@@ -132,6 +132,42 @@ export class ObsidianVault {
       return false;
     }
   }
+
+  async moveFile(oldPath: string, newPath: string): Promise<boolean> {
+    if (!this.dirHandle) return false;
+    try {
+      const content = await this.readFile(oldPath);
+      if (content === null) return false;
+      
+      const writeSuccess = await this.writeFile(newPath, content);
+      if (writeSuccess) {
+        await this.deleteFile(oldPath);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error(`Error moving file from ${oldPath} to ${newPath}:`, e);
+      return false;
+    }
+  }
+
+  async deleteFile(path: string): Promise<boolean> {
+    if (!this.dirHandle) return false;
+    try {
+      const parts = path.split('/');
+      let currentHandle = this.dirHandle;
+      for (let i = 0; i < parts.length - 1; i++) {
+        currentHandle = await currentHandle.getDirectoryHandle(parts[i]);
+      }
+      await currentHandle.removeEntry(parts[parts.length - 1]);
+      
+      this.files = this.files.filter(f => f !== path);
+      return true;
+    } catch (e) {
+      console.error(`Error deleting file ${path}:`, e);
+      return false;
+    }
+  }
 }
 
 export const vault = new ObsidianVault();

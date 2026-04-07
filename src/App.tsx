@@ -46,6 +46,13 @@ export default function App() {
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string, url: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Deletion modal state
+  const [pendingDeletions, setPendingDeletions] = useState<{
+    paths: string[];
+    resolve: (approved: string[]) => void;
+  } | null>(null);
+  const [selectedDeletions, setSelectedDeletions] = useState<Set<string>>(new Set());
+
   // Autocomplete state
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [autocompleteFilter, setAutocompleteFilter] = useState('');
@@ -152,22 +159,34 @@ export default function App() {
 
     let currentModelMessageIndex = -1;
 
-    const result = await sendMessage(userText, imageToSend, selectedTemplate || null, activeChat.history, (msg) => {
-      setChats(prev => prev.map(c => {
-        if (c.id !== activeChatId) return c;
-        
-        const updatedMessages = [...c.messages];
-        if (msg.role === 'user') return c; // Already added optimistically
-        
-        if (currentModelMessageIndex === -1) {
-          currentModelMessageIndex = updatedMessages.length;
-          updatedMessages.push(msg);
-        } else {
-          updatedMessages[currentModelMessageIndex] = msg;
-        }
-        return { ...c, messages: updatedMessages };
-      }));
-    });
+    const result = await sendMessage(
+      userText, 
+      imageToSend, 
+      selectedTemplate || null, 
+      activeChat.history, 
+      (msg) => {
+        setChats(prev => prev.map(c => {
+          if (c.id !== activeChatId) return c;
+          
+          const updatedMessages = [...c.messages];
+          if (msg.role === 'user') return c; // Already added optimistically
+          
+          if (currentModelMessageIndex === -1) {
+            currentModelMessageIndex = updatedMessages.length;
+            updatedMessages.push(msg);
+          } else {
+            updatedMessages[currentModelMessageIndex] = msg;
+          }
+          return { ...c, messages: updatedMessages };
+        }));
+      },
+      (paths) => {
+        return new Promise((resolve) => {
+          setPendingDeletions({ paths, resolve });
+          setSelectedDeletions(new Set(paths)); // Select all by default
+        });
+      }
+    );
 
     updateActiveChat({ history: result.history });
     setIsLoading(false);
@@ -342,6 +361,57 @@ export default function App() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-gray-50 relative">
+        
+        {/* Deletion Modal */}
+        {pendingDeletions && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Confirmar Exclusão</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                A IA solicitou a exclusão dos seguintes arquivos. Selecione quais você deseja realmente deletar:
+              </p>
+              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg mb-6">
+                {pendingDeletions.paths.map(path => (
+                  <label key={path} className="flex items-center gap-3 p-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedDeletions.has(path)}
+                      onChange={(e) => {
+                        const newSet = new Set(selectedDeletions);
+                        if (e.target.checked) newSet.add(path);
+                        else newSet.delete(path);
+                        setSelectedDeletions(newSet);
+                      }}
+                      className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500"
+                    />
+                    <span className="text-sm text-gray-700 break-all">{path}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex justify-end gap-3">
+                <button 
+                  onClick={() => {
+                    pendingDeletions.resolve([]);
+                    setPendingDeletions(null);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancelar Tudo
+                </button>
+                <button 
+                  onClick={() => {
+                    pendingDeletions.resolve(Array.from(selectedDeletions));
+                    setPendingDeletions(null);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  Confirmar Exclusão
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {!isConnected ? (
