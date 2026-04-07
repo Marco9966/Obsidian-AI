@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { vault } from './lib/obsidian';
 import { sendMessage, Message, ChatSession } from './lib/gemini';
-import { FolderOpen, Send, FileText, Bot, User, Loader2, Plus, MessageSquare, Trash2, ImagePlus, X } from 'lucide-react';
+import { FolderOpen, Send, FileText, Bot, User, Loader2, Plus, MessageSquare, Trash2, ImagePlus, X, Square } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,6 +41,7 @@ export default function App() {
   
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   
   // Image upload state
   const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string, url: string } | null>(null);
@@ -139,6 +140,14 @@ export default function App() {
     e.target.value = ''; // reset input
   };
 
+  const handleStopGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsLoading(false);
+    }
+  };
+
   const handleSend = async () => {
     if ((!input.trim() && !selectedImage) || isLoading || !activeChatId || !activeChat) return;
     
@@ -148,6 +157,9 @@ export default function App() {
     setInput('');
     setSelectedImage(null);
     setIsLoading(true);
+
+    const controller = new AbortController();
+    setAbortController(controller);
 
     // Update title if it's the first user message
     if (activeChat.messages.length === 1 && activeChat.title === 'Nova Conversa') {
@@ -185,11 +197,13 @@ export default function App() {
           setPendingDeletions({ paths, resolve });
           setSelectedDeletions(new Set(paths)); // Select all by default
         });
-      }
+      },
+      controller.signal
     );
 
     updateActiveChat({ history: result.history });
     setIsLoading(false);
+    setAbortController(null);
   };
 
   // Autocomplete logic
@@ -541,13 +555,23 @@ export default function App() {
                   <ImagePlus size={20} />
                 </button>
               </div>
-              <button
-                onClick={handleSend}
-                disabled={!isConnected || (!input.trim() && !selectedImage) || isLoading || !activeChatId}
-                className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shrink-0 h-[52px] w-[52px] flex items-center justify-center"
-              >
-                <Send size={18} />
-              </button>
+              {isLoading ? (
+                <button
+                  onClick={handleStopGeneration}
+                  className="p-3 bg-red-600/20 text-red-500 border border-red-500/50 rounded-xl hover:bg-red-600/30 transition-colors shrink-0 h-[52px] w-[52px] flex items-center justify-center"
+                  title="Parar geração"
+                >
+                  <Square size={18} fill="currentColor" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSend}
+                  disabled={!isConnected || (!input.trim() && !selectedImage) || !activeChatId}
+                  className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shrink-0 h-[52px] w-[52px] flex items-center justify-center"
+                >
+                  <Send size={18} />
+                </button>
+              )}
             </div>
           </div>
           <div className="max-w-3xl mx-auto mt-2 text-center">

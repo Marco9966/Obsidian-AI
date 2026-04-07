@@ -98,22 +98,46 @@ let currentModelIndex = 0;
 const MODELS = [
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite-preview',
+  'gemini-2.5-flash',
   'gemini-2.5-flash-lite'
 ];
 
-async function generateWithFallback(contents: any[], config: any, onUpdate?: (msg: Message) => void, currentModelMessage?: Message) {
+async function generateWithFallback(
+  contents: any[], 
+  config: any, 
+  onUpdate?: (msg: Message) => void, 
+  currentModelMessage?: Message,
+  signal?: AbortSignal
+) {
   let retryCount = 0;
   const MAX_RETRIES = 3;
 
-  while (currentModelIndex < MODELS.length) {
+  while (true) {
+    if (signal?.aborted) {
+      throw new Error("AbortError");
+    }
+
     try {
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model: MODELS[currentModelIndex],
         contents,
         config
       });
+
+      const abortPromise = new Promise((_, reject) => {
+        if (signal?.aborted) {
+          reject(new Error("AbortError"));
+        }
+        signal?.addEventListener('abort', () => reject(new Error("AbortError")));
+      });
+
+      const response = await Promise.race([generatePromise, abortPromise]) as any;
       return response;
     } catch (error: any) {
+      if (signal?.aborted) {
+        throw new Error("AbortError");
+      }
+
       const msg = error?.message?.toLowerCase() || String(error).toLowerCase();
       
       // Handle Rate Limits (429) by waiting
@@ -125,7 +149,16 @@ async function generateWithFallback(contents: any[], config: any, onUpdate?: (ms
             currentModelMessage.text += `\n\n*Atingimos o limite de requisições por minuto. Aguardando ${waitTime} segundos para continuar (Tentativa ${retryCount}/${MAX_RETRIES})...*`;
             onUpdate({ ...currentModelMessage });
           }
-          await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+          await new Promise(resolve => {
+            const timeout = setTimeout(resolve, waitTime * 1000);
+            if (signal) {
+              signal.addEventListener('abort', () => {
+                clearTimeout(timeout);
+                resolve(null);
+              });
+            }
+          });
+          if (signal?.aborted) throw new Error("AbortError");
           continue; // Retry with the same model
         }
       }
@@ -143,14 +176,28 @@ async function generateWithFallback(contents: any[], config: any, onUpdate?: (ms
         currentModelIndex++;
         retryCount = 0; // Reset retries for the new model
         if (currentModelIndex >= MODELS.length) {
-          throw new Error("Todos os modelos de fallback estão indisponíveis ou esgotaram sua cota diária.");
+          currentModelIndex = 0;
+          const waitTime = 60; // Wait 1 minute before restarting the cycle
+          if (onUpdate && currentModelMessage) {
+            currentModelMessage.text += `\n\n*Todos os modelos estão ocupados ou atingiram o limite. Não estamos conseguindo executar no momento e vai demorar um pouco mais. Aguardando ${waitTime} segundos para tentar novamente...*`;
+            onUpdate({ ...currentModelMessage });
+          }
+          await new Promise(resolve => {
+            const timeout = setTimeout(resolve, waitTime * 1000);
+            if (signal) {
+              signal.addEventListener('abort', () => {
+                clearTimeout(timeout);
+                resolve(null);
+              });
+            }
+          });
+          if (signal?.aborted) throw new Error("AbortError");
         }
       } else {
         throw error;
       }
     }
   }
-  throw new Error("Nenhum modelo disponível.");
 }
 
 export async function sendMessage(
@@ -159,7 +206,8 @@ export async function sendMessage(
   selectedTemplate: string | null,
   history: any[],
   onUpdate: (msg: Message) => void,
-  onRequestDelete: (paths: string[]) => Promise<string[]>
+  onRequestDelete: (paths: string[]) => Promise<string[]>,
+  signal?: AbortSignal
 ): Promise<{ history: any[], error?: string }> {
   
   let systemInstruction = `Você é um assistente especialista em Obsidian e criação de mundos (world-building).
@@ -240,7 +288,7 @@ ${vault.files.join('\n')}
       systemInstruction,
       tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration, moveFileDeclaration, deleteFilesDeclaration] }],
       temperature: 0.7,
-    }, onUpdate, { role: 'model', text: '' });
+    }, onUpdate, { role: 'model', text: '' }, signal);
 
     let modelResponseText = response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
     let currentModelMessage: Message = { role: 'model', text: modelResponseText };
@@ -251,6 +299,10 @@ ${vault.files.join('\n')}
     }
 
     while (response.functionCalls && response.functionCalls.length > 0) {
+      if (signal?.aborted) {
+        throw new Error("AbortError");
+      }
+
       const functionResponses = [];
       for (const call of response.functionCalls) {
         if (call.name === 'writeNote') {
@@ -341,7 +393,7 @@ ${vault.files.join('\n')}
         systemInstruction,
         tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration, createFolderDeclaration, moveFileDeclaration, deleteFilesDeclaration] }],
         temperature: 0.7,
-      }, onUpdate, currentModelMessage);
+      }, onUpdate, currentModelMessage, signal);
 
       const newText = response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
       if (newText) {
@@ -356,6 +408,11 @@ ${vault.files.join('\n')}
     
     return { history: currentHistory };
   } catch (error: any) {
+    if (error.message === "AbortError") {
+      currentModelMessage.text += `\n\n*[Geração cancelada pelo usuário]*`;
+      onUpdate({ ...currentModelMessage });
+      return { history: currentHistory, error: "Geração cancelada pelo usuário." };
+    }
     console.error("Error generating content:", error);
     const errorMessage = error?.message || String(error);
     onUpdate({ role: 'model', text: `Desculpe, ocorreu um erro ao processar seu pedido:\n\n\`\`\`\n${errorMessage}\n\`\`\`` });
