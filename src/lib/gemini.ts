@@ -235,6 +235,19 @@ faccao:
 ou \`faccao: ["[[Nome da Nota]]"]\`
 Para um único link, use: \`faccao: "[[Nome da Nota]]"\`
 
+CRÍTICO SOBRE TIMELINES (PLUGIN GEORGE BUTCO):
+O usuário possui o plugin "Timeline" do George Butco instalado. Quando o usuário pedir para criar uma timeline ou eventos históricos, use a sintaxe deste plugin:
+1. Para criar a visualização da timeline em uma nota, use um bloco de código especificando a tag que agrupa os eventos:
+\`\`\`timeline
+nome-da-tag
+\`\`\`
+2. Nas notas que representam os eventos (que devem conter a tag \`#nome-da-tag\`), adicione os dados do evento usando a seguinte tag HTML:
+<span class='ob-timelines' data-date='YYYY-MM-DD-HH' data-title='Título do Evento' data-class='orange'>Descrição do evento.</span>
+- O formato de \`data-date\` é estritamente \`YYYY-MM-DD-HH\` (Ano-Mês-Dia-Hora). Use \`00\` para valores desconhecidos (ex: \`1500-00-00-00\`). Para anos antes de Cristo, use um sinal de menos (ex: \`-0500-00-00-00\`).
+- \`data-class\` define a cor (ex: red, orange, green, blue, purple).
+- Para eventos com duração, adicione \`data-type='range'\` e \`data-end='YYYY-MM-DD-HH'\`.
+- Você pode adicionar \`data-img='URL'\` para imagens.
+
 Aqui estão os templates disponíveis no vault:
 <templates>
 ${Object.entries(vault.templates).map(([name, content]) => `  <template name="${name}">\n${content}\n  </template>`).join('\n')}
