@@ -276,11 +276,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-900 font-sans">
+    <div className="flex h-screen bg-gray-950 text-gray-100 font-sans">
       {/* Sidebar */}
-      <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
-          <h1 className="text-xl font-bold flex items-center gap-2 text-indigo-600">
+      <div className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
+        <div className="p-4 border-b border-gray-800">
+          <h1 className="text-xl font-bold flex items-center gap-2 text-indigo-400">
             <Bot size={24} />
             Obsidian AI
           </h1>
@@ -289,8 +289,8 @@ export default function App() {
         <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-6">
           {!isConnected ? (
             <div className="text-center mt-10">
-              <FolderOpen className="mx-auto text-gray-400 mb-4" size={48} />
-              <p className="text-sm text-gray-600 mb-4">Conecte seu vault do Obsidian para começar.</p>
+              <FolderOpen className="mx-auto text-gray-500 mb-4" size={48} />
+              <p className="text-sm text-gray-400 mb-4">Conecte seu vault do Obsidian para começar.</p>
               <button 
                 onClick={handleConnect}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors w-full flex items-center justify-center gap-2"
@@ -302,22 +302,22 @@ export default function App() {
           ) : (
             <>
               <div>
-                <div className="flex items-center gap-2 text-green-600 mb-2">
+                <div className="flex items-center gap-2 text-green-400 mb-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
                   <span className="text-sm font-medium">Vault Conectado</span>
                 </div>
-                <p className="text-xs text-gray-500">{vault.files.length} arquivos carregados</p>
+                <p className="text-xs text-gray-400">{vault.files.length} arquivos carregados</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                   <FileText size={16} />
                   Template Principal
                 </label>
                 <select 
                   value={selectedTemplate}
                   onChange={(e) => setSelectedTemplate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
+                  className="w-full border border-gray-700 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-gray-800 text-gray-100"
                 >
                   <option value="">Nenhum</option>
                   {templates.map(t => (
@@ -328,8 +328,8 @@ export default function App() {
 
               <div className="flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Conversas</label>
-                  <button onClick={createNewChat} className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50">
+                  <label className="block text-sm font-medium text-gray-300">Conversas</label>
+                  <button onClick={createNewChat} className="text-indigo-400 hover:text-indigo-300 p-1 rounded hover:bg-indigo-900/50">
                     <Plus size={16} />
                   </button>
                 </div>
@@ -338,7 +338,7 @@ export default function App() {
                     <div 
                       key={chat.id}
                       onClick={() => setActiveChatId(chat.id)}
-                      className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between group cursor-pointer ${activeChatId === chat.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}
+                      className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between group cursor-pointer ${activeChatId === chat.id ? 'bg-indigo-900/40 text-indigo-300 font-medium' : 'text-gray-400 hover:bg-gray-800'}`}
                     >
                       <div className="flex items-center gap-2 overflow-hidden">
                         <MessageSquare size={14} className="flex-shrink-0" />
@@ -346,7 +346,7 @@ export default function App() {
                       </div>
                       <button 
                         onClick={(e) => deleteChat(chat.id, e)}
-                        className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -360,19 +360,19 @@ export default function App() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-gray-50 relative">
+      <div className="flex-1 flex flex-col bg-gray-950 relative">
         
         {/* Deletion Modal */}
         {pendingDeletions && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 m-4">
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Confirmar Exclusão</h2>
-              <p className="text-sm text-gray-600 mb-4">
+            <div className="bg-gray-900 rounded-xl shadow-xl max-w-md w-full p-6 m-4">
+              <h2 className="text-xl font-bold text-white mb-2">Confirmar Exclusão</h2>
+              <p className="text-sm text-gray-400 mb-4">
                 A IA solicitou a exclusão dos seguintes arquivos. Selecione quais você deseja realmente deletar:
               </p>
-              <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg mb-6">
+              <div className="max-h-60 overflow-y-auto border border-gray-700 rounded-lg mb-6">
                 {pendingDeletions.paths.map(path => (
-                  <label key={path} className="flex items-center gap-3 p-3 hover:bg-gray-50 border-b border-gray-100 last:border-0 cursor-pointer">
+                  <label key={path} className="flex items-center gap-3 p-3 hover:bg-gray-800 border-b border-gray-800 last:border-0 cursor-pointer">
                     <input 
                       type="checkbox" 
                       checked={selectedDeletions.has(path)}
@@ -382,9 +382,9 @@ export default function App() {
                         else newSet.delete(path);
                         setSelectedDeletions(newSet);
                       }}
-                      className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500"
+                      className="w-4 h-4 text-red-600 rounded border-gray-600 bg-gray-800 focus:ring-red-500"
                     />
-                    <span className="text-sm text-gray-700 break-all">{path}</span>
+                    <span className="text-sm text-gray-300 break-all">{path}</span>
                   </label>
                 ))}
               </div>
@@ -394,7 +394,7 @@ export default function App() {
                     pendingDeletions.resolve([]);
                     setPendingDeletions(null);
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   Cancelar Tudo
                 </button>
@@ -415,11 +415,11 @@ export default function App() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {!isConnected ? (
-            <div className="h-full flex items-center justify-center text-gray-400">
+            <div className="h-full flex items-center justify-center text-gray-500">
               Por favor, conecte seu vault para começar a conversar.
             </div>
           ) : !activeChat ? (
-            <div className="h-full flex items-center justify-center text-gray-400">
+            <div className="h-full flex items-center justify-center text-gray-500">
               Selecione ou crie uma conversa para começar.
             </div>
           ) : (
@@ -427,14 +427,14 @@ export default function App() {
               {activeChat.messages.map((msg, idx) => (
                 <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {msg.role === 'model' && (
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-1">
-                      <Bot size={18} className="text-indigo-600" />
+                    <div className="w-8 h-8 rounded-full bg-indigo-900/50 flex items-center justify-center flex-shrink-0 mt-1">
+                      <Bot size={18} className="text-indigo-400" />
                     </div>
                   )}
                   <div className={`max-w-[80%] rounded-2xl px-5 py-4 ${
                     msg.role === 'user' 
                       ? 'bg-indigo-600 text-white rounded-tr-sm' 
-                      : 'bg-white border border-gray-200 shadow-sm rounded-tl-sm text-gray-800'
+                      : 'bg-gray-900 border border-gray-800 shadow-sm rounded-tl-sm text-gray-200'
                   }`}>
                     {msg.image && (
                       <img 
@@ -446,24 +446,24 @@ export default function App() {
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{msg.text}</p>
                     ) : (
-                      <div className="markdown-body prose prose-sm max-w-none">
+                      <div className="markdown-body prose prose-sm prose-invert max-w-none">
                         <Markdown remarkPlugins={[remarkGfm]}>{msg.text}</Markdown>
                       </div>
                     )}
                   </div>
                   {msg.role === 'user' && (
-                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-1">
-                      <User size={18} className="text-gray-600" />
+                    <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center flex-shrink-0 mt-1">
+                      <User size={18} className="text-gray-400" />
                     </div>
                   )}
                 </div>
               ))}
               {isLoading && (
                 <div className="flex gap-4 justify-start">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0 mt-1">
-                    <Bot size={18} className="text-indigo-600" />
+                  <div className="w-8 h-8 rounded-full bg-indigo-900/50 flex items-center justify-center flex-shrink-0 mt-1">
+                    <Bot size={18} className="text-indigo-400" />
                   </div>
-                  <div className="bg-white border border-gray-200 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 text-gray-500">
+                  <div className="bg-gray-900 border border-gray-800 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 text-gray-400">
                     <Loader2 size={16} className="animate-spin" />
                     Pensando...
                   </div>
@@ -475,7 +475,7 @@ export default function App() {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-white border-t border-gray-200 relative">
+        <div className="p-4 bg-gray-900 border-t border-gray-800 relative">
           <div className="max-w-3xl mx-auto relative">
             
             {/* Image Preview */}
@@ -484,7 +484,7 @@ export default function App() {
                 <img 
                   src={selectedImage.url} 
                   alt="Preview" 
-                  className="h-24 rounded-lg object-cover border border-gray-200 shadow-sm" 
+                  className="h-24 rounded-lg object-cover border border-gray-700 shadow-sm" 
                 />
                 <button 
                   onClick={() => setSelectedImage(null)} 
@@ -497,12 +497,12 @@ export default function App() {
 
             {/* Autocomplete Dropdown */}
             {showAutocomplete && filteredNotes.length > 0 && (
-              <div className="absolute bottom-full mb-2 left-0 w-64 bg-white border border-gray-200 shadow-lg rounded-lg overflow-hidden z-10">
+              <div className="absolute bottom-full mb-2 left-0 w-64 bg-gray-800 border border-gray-700 shadow-lg rounded-lg overflow-hidden z-10">
                 {filteredNotes.map((note, idx) => (
                   <div 
                     key={note}
                     onClick={() => insertAutocomplete(note)}
-                    className={`px-4 py-2 text-sm cursor-pointer ${idx === autocompleteIndex ? 'bg-indigo-50 text-indigo-700' : 'text-gray-700 hover:bg-gray-50'}`}
+                    className={`px-4 py-2 text-sm cursor-pointer ${idx === autocompleteIndex ? 'bg-indigo-900/50 text-indigo-300' : 'text-gray-300 hover:bg-gray-700'}`}
                   >
                     {note}
                   </div>
@@ -519,7 +519,7 @@ export default function App() {
                   onKeyDown={handleKeyDown}
                   placeholder={isConnected ? 'Digite " para mencionar uma nota...' : "Conecte o vault para digitar..."}
                   disabled={!isConnected || isLoading || !activeChatId}
-                  className="w-full border border-gray-300 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:bg-gray-50 disabled:text-gray-400"
+                  className="w-full border border-gray-700 bg-gray-800 text-white rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:bg-gray-900 disabled:text-gray-500"
                   rows={1}
                   style={{ minHeight: '52px', maxHeight: '200px' }}
                 />
@@ -535,7 +535,7 @@ export default function App() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={!isConnected || isLoading || !activeChatId}
-                  className="absolute left-2 bottom-2 p-2 text-gray-400 hover:text-indigo-600 disabled:opacity-50 transition-colors"
+                  className="absolute left-2 bottom-2 p-2 text-gray-500 hover:text-indigo-400 disabled:opacity-50 transition-colors"
                   title="Anexar imagem"
                 >
                   <ImagePlus size={20} />
@@ -544,14 +544,14 @@ export default function App() {
               <button
                 onClick={handleSend}
                 disabled={!isConnected || (!input.trim() && !selectedImage) || isLoading || !activeChatId}
-                className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shrink-0 h-[52px] w-[52px] flex items-center justify-center"
+                className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors shrink-0 h-[52px] w-[52px] flex items-center justify-center"
               >
                 <Send size={18} />
               </button>
             </div>
           </div>
           <div className="max-w-3xl mx-auto mt-2 text-center">
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-500">
               Pressione Enter para enviar, Shift+Enter para pular linha. Digite " para autocompletar nomes de notas.
             </p>
           </div>

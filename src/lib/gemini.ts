@@ -98,7 +98,7 @@ let currentModelIndex = 0;
 const MODELS = [
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite-preview',
-  'gemini-3.1-flash-live-preview'
+  'gemini-2.5-flash-lite'
 ];
 
 async function generateWithFallback(contents: any[], config: any, onUpdate?: (msg: Message) => void, currentModelMessage?: Message) {
