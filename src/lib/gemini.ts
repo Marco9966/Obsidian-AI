@@ -239,20 +239,26 @@ ou \`faccao: ["[[Nome da Nota]]"]\`
 Para um único link, use: \`faccao: "[[Nome da Nota]]"\`
 
 CRÍTICO SOBRE TIMELINES (PLUGIN GEORGE BUTCO):
-O usuário possui o plugin "Timeline" do George Butco instalado. O usuário deseja que TODOS os dados da timeline fiquem centralizados no arquivo principal. SIGA ESTAS REGRAS ESTRITAMENTE:
-1. Crie UMA nota principal para a timeline.
-2. Nesta nota principal, adicione o bloco de código Markdown com a linguagem definida como \`timeline\` e o nome da tag dentro do bloco (sem o #):
-\`\`\`timeline
-nome-da-tag
+O usuário possui o plugin "Timeline" do George Butco instalado. Este plugin NÃO importa eventos de outras notas. Todos os eventos devem ser escritos DENTRO do bloco de código na mesma nota.
+Para criar uma timeline, crie UMA nota e use o bloco de código \`timeline-labeled\`.
+Siga EXATAMENTE esta sintaxe:
+
+\`\`\`timeline-labeled
+date: Ano-Mês-Dia (ou qualquer texto de data)
+title: Título do Evento
+content:
+Descrição completa do evento. Pode ter múltiplas linhas.
+
+date: Outra Data
+title: Outro Evento
+content:
+Descrição do outro evento.
 \`\`\`
-3. AINDA NA NOTA PRINCIPAL, adicione a tag (ex: \`#nome-da-tag\`) no corpo do texto e coloque TODOS os spans HTML dos eventos listados um abaixo do outro. 
-4. NUNCA, EM HIPÓTESE ALGUMA, coloque as tags \`<span class='ob-timelines'...>\` dentro das notas individuais dos eventos. As notas individuais devem ficar limpas, apenas com texto markdown normal.
-5. O formato do span (que vai APENAS na nota principal da timeline) é:
-<span class='ob-timelines' data-date='YYYY-MM-DD-HH' data-title='Título do Evento' data-class='orange'>Descrição curta do evento.</span>
-- O formato de \`data-date\` é estritamente \`YYYY-MM-DD-HH\` (Ano-Mês-Dia-Hora). Use \`00\` para valores desconhecidos (ex: \`1500-00-00-00\`). Para anos antes de Cristo, use um sinal de menos (ex: \`-0500-00-00-00\`).
-- \`data-class\` define a cor (ex: red, orange, green, blue, purple).
-- Para eventos com duração, adicione \`data-type='range'\` e \`data-end='YYYY-MM-DD-HH'\`.
-- Você pode adicionar \`data-img='URL'\` para imagens.
+
+Regras para a timeline:
+1. NÃO crie notas separadas para os eventos da timeline.
+2. NÃO use tags HTML como \`<span class='ob-timelines'>\`. Isso pertence a outro plugin.
+3. Use apenas o bloco \`\`\`timeline-labeled\`\`\` com \`date:\`, \`title:\` e \`content:\` para cada evento, separados por uma linha em branco.
 
 Aqui estão os templates disponíveis no vault:
 <templates>
@@ -314,7 +320,11 @@ ${vault.files.join('\n')}
     onUpdate(currentModelMessage);
 
     if (response.candidates && response.candidates.length > 0 && response.candidates[0].content) {
-      currentHistory.push(response.candidates[0].content);
+      const contentToPush = JSON.parse(JSON.stringify(response.candidates[0].content));
+      if (contentToPush.parts) {
+        contentToPush.parts = contentToPush.parts.filter((p: any) => !p.thought);
+      }
+      currentHistory.push(contentToPush);
     }
 
     while (response.functionCalls && response.functionCalls.length > 0) {
@@ -421,7 +431,11 @@ ${vault.files.join('\n')}
       }
       
       if (response.candidates && response.candidates.length > 0 && response.candidates[0].content) {
-        currentHistory.push(response.candidates[0].content);
+        const contentToPush = JSON.parse(JSON.stringify(response.candidates[0].content));
+        if (contentToPush.parts) {
+          contentToPush.parts = contentToPush.parts.filter((p: any) => !p.thought);
+        }
+        currentHistory.push(contentToPush);
       }
     }
     
