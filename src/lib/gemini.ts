@@ -51,9 +51,9 @@ export type ChatSession = {
 
 let currentModelIndex = 0;
 const MODELS = [
-  'gemini-3.1-flash-preview',
+  'gemini-3-flash-preview',
   'gemini-3.1-flash-lite-preview',
-  'gemini-3.1-flash-live-preview'
+  'gemini-3-flash-live-preview'
 ];
 
 async function generateWithFallback(contents: any[], config: any) {
@@ -67,11 +67,19 @@ async function generateWithFallback(contents: any[], config: any) {
       return response;
     } catch (error: any) {
       const msg = error?.message?.toLowerCase() || String(error).toLowerCase();
-      if (msg.includes('429') || msg.includes('quota') || msg.includes('exhausted') || msg.includes('limit')) {
-        console.warn(`Model ${MODELS[currentModelIndex]} hit quota limit. Switching to next model.`);
+      if (
+        msg.includes('429') || 
+        msg.includes('quota') || 
+        msg.includes('exhausted') || 
+        msg.includes('limit') ||
+        msg.includes('503') ||
+        msg.includes('unavailable') ||
+        msg.includes('high demand')
+      ) {
+        console.warn(`Model ${MODELS[currentModelIndex]} hit quota limit or is unavailable. Switching to next model.`);
         currentModelIndex++;
         if (currentModelIndex >= MODELS.length) {
-          throw new Error("All fallback models have exhausted their daily quota.");
+          throw new Error("All fallback models are currently unavailable or have exhausted their quota.");
         }
       } else {
         throw error;
