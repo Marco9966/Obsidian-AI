@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { vault } from './lib/obsidian';
 import { sendMessage, Message, ChatSession } from './lib/gemini';
-import { FolderOpen, Send, FileText, Bot, User, Loader2, Plus, MessageSquare, Trash2 } from 'lucide-react';
+import { FolderOpen, Send, FileText, Bot, User, Loader2, Plus, MessageSquare, Trash2, ImagePlus, X } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,6 +41,10 @@ export default function App() {
   
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Image upload state
+  const [selectedImage, setSelectedImage] = useState<{ data: string, mimeType: string, url: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Autocomplete state
   const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -91,8 +95,8 @@ export default function App() {
   const createNewChat = () => {
     const newChat: ChatSession = {
       id: uuidv4(),
-      title: 'New Chat',
-      messages: [{ role: 'model', text: 'Vault connected! How can I help you build your world today?' }],
+      title: 'Nova Conversa',
+      messages: [{ role: 'model', text: 'Vault conectado! Como posso ajudar a construir seu mundo hoje?' }],
       history: []
     };
     setChats(prev => [newChat, ...prev]);
@@ -111,24 +115,44 @@ export default function App() {
     setChats(prev => prev.map(c => c.id === activeChatId ? { ...c, ...updates } : c));
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = (reader.result as string).split(',')[1];
+      setSelectedImage({
+        data: base64String,
+        mimeType: file.type,
+        url: URL.createObjectURL(file)
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; // reset input
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !activeChatId || !activeChat) return;
+    if ((!input.trim() && !selectedImage) || isLoading || !activeChatId || !activeChat) return;
     
     const userText = input.trim();
+    const imageToSend = selectedImage ? { data: selectedImage.data, mimeType: selectedImage.mimeType } : null;
+    
     setInput('');
+    setSelectedImage(null);
     setIsLoading(true);
 
     // Update title if it's the first user message
-    if (activeChat.messages.length === 1 && activeChat.title === 'New Chat') {
-      updateActiveChat({ title: userText.slice(0, 30) + (userText.length > 30 ? '...' : '') });
+    if (activeChat.messages.length === 1 && activeChat.title === 'Nova Conversa') {
+      updateActiveChat({ title: userText.slice(0, 30) + (userText.length > 30 ? '...' : '') || 'Imagem' });
     }
 
-    const newMessages = [...activeChat.messages, { role: 'user' as const, text: userText }];
+    const newMessages = [...activeChat.messages, { role: 'user' as const, text: userText, image: imageToSend }];
     updateActiveChat({ messages: newMessages });
 
     let currentModelMessageIndex = -1;
 
-    const result = await sendMessage(userText, selectedTemplate || null, activeChat.history, (msg) => {
+    const result = await sendMessage(userText, imageToSend, selectedTemplate || null, activeChat.history, (msg) => {
       setChats(prev => prev.map(c => {
         if (c.id !== activeChatId) return c;
         
@@ -247,13 +271,13 @@ export default function App() {
           {!isConnected ? (
             <div className="text-center mt-10">
               <FolderOpen className="mx-auto text-gray-400 mb-4" size={48} />
-              <p className="text-sm text-gray-600 mb-4">Connect your Obsidian vault to get started.</p>
+              <p className="text-sm text-gray-600 mb-4">Conecte seu vault do Obsidian para começar.</p>
               <button 
                 onClick={handleConnect}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors w-full flex items-center justify-center gap-2"
               >
                 <FolderOpen size={18} />
-                Open Vault
+                Abrir Vault
               </button>
             </div>
           ) : (
@@ -261,22 +285,22 @@ export default function App() {
               <div>
                 <div className="flex items-center gap-2 text-green-600 mb-2">
                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-sm font-medium">Vault Connected</span>
+                  <span className="text-sm font-medium">Vault Conectado</span>
                 </div>
-                <p className="text-xs text-gray-500">{vault.files.length} files loaded</p>
+                <p className="text-xs text-gray-500">{vault.files.length} arquivos carregados</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                   <FileText size={16} />
-                  Primary Template
+                  Template Principal
                 </label>
                 <select 
                   value={selectedTemplate}
                   onChange={(e) => setSelectedTemplate(e.target.value)}
                   className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
                 >
-                  <option value="">None</option>
+                  <option value="">Nenhum</option>
                   {templates.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
@@ -285,7 +309,7 @@ export default function App() {
 
               <div className="flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Chats</label>
+                  <label className="block text-sm font-medium text-gray-700">Conversas</label>
                   <button onClick={createNewChat} className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50">
                     <Plus size={16} />
                   </button>
@@ -322,11 +346,11 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {!isConnected ? (
             <div className="h-full flex items-center justify-center text-gray-400">
-              Please connect your vault to start chatting.
+              Por favor, conecte seu vault para começar a conversar.
             </div>
           ) : !activeChat ? (
             <div className="h-full flex items-center justify-center text-gray-400">
-              Select or create a chat to begin.
+              Selecione ou crie uma conversa para começar.
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-6">
@@ -342,6 +366,13 @@ export default function App() {
                       ? 'bg-indigo-600 text-white rounded-tr-sm' 
                       : 'bg-white border border-gray-200 shadow-sm rounded-tl-sm text-gray-800'
                   }`}>
+                    {msg.image && (
+                      <img 
+                        src={`data:${msg.image.mimeType};base64,${msg.image.data}`} 
+                        alt="Upload do usuário" 
+                        className="max-w-full h-auto rounded-lg mb-3 object-contain max-h-64" 
+                      />
+                    )}
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{msg.text}</p>
                     ) : (
@@ -364,7 +395,7 @@ export default function App() {
                   </div>
                   <div className="bg-white border border-gray-200 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4 flex items-center gap-2 text-gray-500">
                     <Loader2 size={16} className="animate-spin" />
-                    Thinking...
+                    Pensando...
                   </div>
                 </div>
               )}
@@ -377,6 +408,23 @@ export default function App() {
         <div className="p-4 bg-white border-t border-gray-200 relative">
           <div className="max-w-3xl mx-auto relative">
             
+            {/* Image Preview */}
+            {selectedImage && (
+              <div className="relative inline-block mb-3">
+                <img 
+                  src={selectedImage.url} 
+                  alt="Preview" 
+                  className="h-24 rounded-lg object-cover border border-gray-200 shadow-sm" 
+                />
+                <button 
+                  onClick={() => setSelectedImage(null)} 
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-md transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
             {/* Autocomplete Dropdown */}
             {showAutocomplete && filteredNotes.length > 0 && (
               <div className="absolute bottom-full mb-2 left-0 w-64 bg-white border border-gray-200 shadow-lg rounded-lg overflow-hidden z-10">
@@ -392,28 +440,49 @@ export default function App() {
               </div>
             )}
 
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInput}
-              onKeyDown={handleKeyDown}
-              placeholder={isConnected ? 'Type " to mention a note...' : "Connect vault to type..."}
-              disabled={!isConnected || isLoading || !activeChatId}
-              className="w-full border border-gray-300 rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:bg-gray-50 disabled:text-gray-400"
-              rows={1}
-              style={{ minHeight: '52px', maxHeight: '200px' }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!isConnected || !input.trim() || isLoading || !activeChatId}
-              className="absolute right-2 bottom-2 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send size={18} />
-            </button>
+            <div className="relative flex items-end gap-2">
+              <div className="relative flex-1">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={handleInput}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isConnected ? 'Digite " para mencionar uma nota...' : "Conecte o vault para digitar..."}
+                  disabled={!isConnected || isLoading || !activeChatId}
+                  className="w-full border border-gray-300 rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none disabled:bg-gray-50 disabled:text-gray-400"
+                  rows={1}
+                  style={{ minHeight: '52px', maxHeight: '200px' }}
+                />
+                
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  ref={fileInputRef}
+                  onChange={handleImageUpload}
+                />
+                
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!isConnected || isLoading || !activeChatId}
+                  className="absolute left-2 bottom-2 p-2 text-gray-400 hover:text-indigo-600 disabled:opacity-50 transition-colors"
+                  title="Anexar imagem"
+                >
+                  <ImagePlus size={20} />
+                </button>
+              </div>
+              <button
+                onClick={handleSend}
+                disabled={!isConnected || (!input.trim() && !selectedImage) || isLoading || !activeChatId}
+                className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shrink-0 h-[52px] w-[52px] flex items-center justify-center"
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
           <div className="max-w-3xl mx-auto mt-2 text-center">
             <p className="text-xs text-gray-400">
-              Press Enter to send, Shift+Enter for new line. Type " to autocomplete note names.
+              Pressione Enter para enviar, Shift+Enter para pular linha. Digite " para autocompletar nomes de notas.
             </p>
           </div>
         </div>

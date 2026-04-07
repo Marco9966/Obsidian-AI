@@ -40,6 +40,7 @@ const readNoteDeclaration = {
 export type Message = {
   role: 'user' | 'model';
   text: string;
+  image?: { data: string, mimeType: string };
 };
 
 export type ChatSession = {
@@ -79,56 +80,84 @@ async function generateWithFallback(contents: any[], config: any) {
         console.warn(`Model ${MODELS[currentModelIndex]} hit quota limit or is unavailable. Switching to next model.`);
         currentModelIndex++;
         if (currentModelIndex >= MODELS.length) {
-          throw new Error("All fallback models are currently unavailable or have exhausted their quota.");
+          throw new Error("Todos os modelos de fallback estão indisponíveis ou esgotaram sua cota diária.");
         }
       } else {
         throw error;
       }
     }
   }
-  throw new Error("No models available.");
+  throw new Error("Nenhum modelo disponível.");
 }
 
 export async function sendMessage(
   userText: string, 
+  image: { data: string, mimeType: string } | null,
   selectedTemplate: string | null,
   history: any[],
   onUpdate: (msg: Message) => void
 ): Promise<{ history: any[], error?: string }> {
   
-  let systemInstruction = `You are an expert Obsidian vault manager and world-building assistant.
-You have full access to the user's Obsidian vault.
-The user will ask you to create or modify notes (characters, locations, events, etc.).
+  let systemInstruction = `Você é um assistente especialista em Obsidian e criação de mundos (world-building).
+Você tem acesso total ao vault do Obsidian do usuário.
+O usuário pedirá para você criar ou modificar notas (personagens, locais, eventos, etc.).
+Se o usuário enviar uma imagem, analise-a detalhadamente e use as informações visuais para ajudar na criação de mundo, descrições de personagens, locais, ou o que o usuário solicitar.
 
-Here are the available templates in the vault:
+CRÍTICO SOBRE PROPRIEDADES (YAML FRONTMATTER):
+Quando você criar links para outras notas dentro do frontmatter (properties) no topo do arquivo, você DEVE formatá-los corretamente para o Obsidian.
+NUNCA use a sintaxe \`[[["Nome da Nota"]]]\`.
+Para listas de links, use:
+\`\`\`yaml
+faccao:
+  - "[[Nome da Nota]]"
+\`\`\`
+ou \`faccao: ["[[Nome da Nota]]"]\`
+Para um único link, use: \`faccao: "[[Nome da Nota]]"\`
+
+Aqui estão os templates disponíveis no vault:
 <templates>
 ${Object.entries(vault.templates).map(([name, content]) => `  <template name="${name}">\n${content}\n  </template>`).join('\n')}
 </templates>
 
-When creating a note, ALWAYS use the appropriate template if one exists.
-If the user explicitly selects a template, prioritize that for the main subject of their request.
-If the user's request implies the creation of secondary entities (e.g., they describe a character who participated in a specific event), you should proactively create notes for those secondary entities as well, using their respective templates, and link them together using Obsidian wikilinks (e.g., [[Event Name]]).
+Ao criar uma nota, SEMPRE use o template apropriado se houver um.
+Se o usuário selecionar explicitamente um template, priorize-o para o assunto principal do pedido.
+Se o pedido do usuário implicar na criação de entidades secundárias (ex: um personagem que participou de um evento específico), você deve proativamente criar notas para essas entidades secundárias também, usando seus respectivos templates, e linká-las usando wikilinks do Obsidian (ex: [[Nome do Evento]]).
 
-The vault has the following folder structure for organization:
+O vault possui a seguinte estrutura de pastas para organização:
 - 01_Personagens
 - 02_Locais
 - 03_Organizações
 - 04_Eventos
 
-Always place new notes in the correct folder based on their type.
+Sempre coloque as novas notas na pasta correta baseada no seu tipo.
 
-Here is the current list of files in the vault:
+Aqui está a lista atual de arquivos no vault:
 ${vault.files.join('\n')}
 `;
 
   let prompt = userText;
   if (selectedTemplate) {
-    prompt = `[User selected primary template: ${selectedTemplate}]\n\n${userText}`;
+    prompt = `[O usuário selecionou o template principal: ${selectedTemplate}]\n\n${userText}`;
   }
 
   const currentHistory = [...history];
-  currentHistory.push({ role: 'user', parts: [{ text: prompt }] });
-  onUpdate({ role: 'user', text: userText });
+  const userParts: any[] = [];
+  
+  if (prompt.trim()) {
+    userParts.push({ text: prompt });
+  }
+  
+  if (image) {
+    userParts.push({
+      inlineData: {
+        data: image.data,
+        mimeType: image.mimeType
+      }
+    });
+  }
+
+  currentHistory.push({ role: 'user', parts: userParts });
+  onUpdate({ role: 'user', text: userText, image: image || undefined });
 
   try {
     let response = await generateWithFallback(currentHistory, {
@@ -153,7 +182,7 @@ ${vault.files.join('\n')}
           const content = call.args.content as string;
           const success = await vault.writeFile(path, content);
           
-          currentModelMessage.text += `\n\n*Created/Updated note: \`${path}\`*`;
+          currentModelMessage.text += `\n\n*Nota criada/atualizada: \`${path}\`*`;
           onUpdate({ ...currentModelMessage });
 
           functionResponses.push({
@@ -166,7 +195,7 @@ ${vault.files.join('\n')}
           const path = call.args.path as string;
           const content = await vault.readFile(path);
           
-          currentModelMessage.text += `\n\n*Read note: \`${path}\`*`;
+          currentModelMessage.text += `\n\n*Nota lida: \`${path}\`*`;
           onUpdate({ ...currentModelMessage });
 
           functionResponses.push({
@@ -201,7 +230,7 @@ ${vault.files.join('\n')}
   } catch (error: any) {
     console.error("Error generating content:", error);
     const errorMessage = error?.message || String(error);
-    onUpdate({ role: 'model', text: `Sorry, an error occurred while processing your request:\n\n\`\`\`\n${errorMessage}\n\`\`\`` });
+    onUpdate({ role: 'model', text: `Desculpe, ocorreu um erro ao processar seu pedido:\n\n\`\`\`\n${errorMessage}\n\`\`\`` });
     return { history: currentHistory, error: errorMessage };
   }
 }
