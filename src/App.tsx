@@ -16,8 +16,28 @@ export default function App() {
   const [templates, setTemplates] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   
-  const [chats, setChats] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [chats, setChats] = useState<ChatSession[]>(() => {
+    const saved = localStorage.getItem('obsidian-ai-chats');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error("Failed to parse saved chats", e);
+      }
+    }
+    return [];
+  });
+  
+  const [activeChatId, setActiveChatId] = useState<string | null>(() => {
+    const saved = localStorage.getItem('obsidian-ai-chats');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.length > 0) return parsed[0].id;
+      } catch (e) {}
+    }
+    return null;
+  });
   
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -32,26 +52,13 @@ export default function App() {
 
   const activeChat = chats.find(c => c.id === activeChatId);
 
-  // Load persisted vault and chats on mount
+  // Load persisted vault on mount
   useEffect(() => {
     const init = async () => {
       const success = await vault.loadPersisted();
       if (success) {
         setIsConnected(true);
         setTemplates(Object.keys(vault.templates));
-      }
-
-      const savedChats = localStorage.getItem('obsidian-ai-chats');
-      if (savedChats) {
-        try {
-          const parsed = JSON.parse(savedChats);
-          setChats(parsed);
-          if (parsed.length > 0) {
-            setActiveChatId(parsed[0].id);
-          }
-        } catch (e) {
-          console.error("Failed to parse saved chats", e);
-        }
       }
     };
     init();
