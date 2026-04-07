@@ -49,6 +49,38 @@ export type ChatSession = {
   history: any[];
 };
 
+let currentModelIndex = 0;
+const MODELS = [
+  'gemini-3.1-flash-preview',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3.1-flash-live-preview'
+];
+
+async function generateWithFallback(contents: any[], config: any) {
+  while (currentModelIndex < MODELS.length) {
+    try {
+      const response = await ai.models.generateContent({
+        model: MODELS[currentModelIndex],
+        contents,
+        config
+      });
+      return response;
+    } catch (error: any) {
+      const msg = error?.message?.toLowerCase() || String(error).toLowerCase();
+      if (msg.includes('429') || msg.includes('quota') || msg.includes('exhausted') || msg.includes('limit')) {
+        console.warn(`Model ${MODELS[currentModelIndex]} hit quota limit. Switching to next model.`);
+        currentModelIndex++;
+        if (currentModelIndex >= MODELS.length) {
+          throw new Error("All fallback models have exhausted their daily quota.");
+        }
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error("No models available.");
+}
+
 export async function sendMessage(
   userText: string, 
   selectedTemplate: string | null,
@@ -91,14 +123,10 @@ ${vault.files.join('\n')}
   onUpdate({ role: 'user', text: userText });
 
   try {
-    let response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: currentHistory,
-      config: {
-        systemInstruction,
-        tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
-        temperature: 0.7,
-      }
+    let response = await generateWithFallback(currentHistory, {
+      systemInstruction,
+      tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
+      temperature: 0.7,
     });
 
     let modelResponseText = response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
@@ -144,14 +172,10 @@ ${vault.files.join('\n')}
 
       currentHistory.push({ role: 'user', parts: functionResponses });
 
-      response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: currentHistory,
-        config: {
-          systemInstruction,
-          tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
-          temperature: 0.7,
-        }
+      response = await generateWithFallback(currentHistory, {
+        systemInstruction,
+        tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
+        temperature: 0.7,
       });
 
       const newText = response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
