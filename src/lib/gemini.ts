@@ -239,21 +239,20 @@ ou \`faccao: ["[[Nome da Nota]]"]\`
 Para um único link, use: \`faccao: "[[Nome da Nota]]"\`
 
 CRÍTICO SOBRE TIMELINES (PLUGIN GEORGE BUTCO):
-O usuário possui o plugin "Timeline" do George Butco instalado. Para que a timeline funcione, você deve seguir EXATAMENTE estes passos:
-1. Crie uma nota principal que irá exibir a timeline. Nela, adicione um bloco de código Markdown com a linguagem definida como \`timeline\` e o nome da tag dentro do bloco (sem o #):
+O usuário possui o plugin "Timeline" do George Butco instalado. O usuário deseja que TODOS os dados da timeline fiquem centralizados no arquivo principal. SIGA ESTAS REGRAS ESTRITAMENTE:
+1. Crie UMA nota principal para a timeline.
+2. Nesta nota principal, adicione o bloco de código Markdown com a linguagem definida como \`timeline\` e o nome da tag dentro do bloco (sem o #):
 \`\`\`timeline
 nome-da-tag
 \`\`\`
-(Certifique-se de que a formatação do bloco de código esteja correta, usando três crases antes e depois).
-2. Para CADA evento da timeline, você DEVE criar uma nota separada. NÃO crie uma pasta separada apenas para a timeline a menos que o usuário peça. Coloque os eventos na pasta \`04_Eventos\`.
-3. Em CADA nota de evento, você DEVE incluir a tag no texto ou no frontmatter (ex: \`#nome-da-tag\` ou \`tags: [nome-da-tag]\`).
-4. Em CADA nota de evento, você DEVE incluir a tag HTML do plugin com os dados do evento. Esta tag deve estar no corpo da nota (não no frontmatter):
+3. AINDA NA NOTA PRINCIPAL, adicione a tag (ex: \`#nome-da-tag\`) no corpo do texto e coloque TODOS os spans HTML dos eventos listados um abaixo do outro. 
+4. NUNCA, EM HIPÓTESE ALGUMA, coloque as tags \`<span class='ob-timelines'...>\` dentro das notas individuais dos eventos. As notas individuais devem ficar limpas, apenas com texto markdown normal.
+5. O formato do span (que vai APENAS na nota principal da timeline) é:
 <span class='ob-timelines' data-date='YYYY-MM-DD-HH' data-title='Título do Evento' data-class='orange'>Descrição curta do evento.</span>
 - O formato de \`data-date\` é estritamente \`YYYY-MM-DD-HH\` (Ano-Mês-Dia-Hora). Use \`00\` para valores desconhecidos (ex: \`1500-00-00-00\`). Para anos antes de Cristo, use um sinal de menos (ex: \`-0500-00-00-00\`).
 - \`data-class\` define a cor (ex: red, orange, green, blue, purple).
 - Para eventos com duração, adicione \`data-type='range'\` e \`data-end='YYYY-MM-DD-HH'\`.
 - Você pode adicionar \`data-img='URL'\` para imagens.
-Se você não criar notas separadas para cada evento contendo a tag e o \`span\`, a timeline NÃO VAI FUNCIONAR.
 
 Aqui estão os templates disponíveis no vault:
 <templates>
