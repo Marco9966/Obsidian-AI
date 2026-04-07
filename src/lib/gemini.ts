@@ -54,10 +54,13 @@ let currentModelIndex = 0;
 const MODELS = [
   'gemini-3-flash-preview',
   'gemini-3.1-flash-lite-preview',
-  'gemini-3-flash-live-preview'
+  'gemini-3.1-flash-live-preview'
 ];
 
-async function generateWithFallback(contents: any[], config: any) {
+async function generateWithFallback(contents: any[], config: any, onUpdate?: (msg: Message) => void, currentModelMessage?: Message) {
+  let retryCount = 0;
+  const MAX_RETRIES = 3;
+
   while (currentModelIndex < MODELS.length) {
     try {
       const response = await ai.models.generateContent({
@@ -68,17 +71,33 @@ async function generateWithFallback(contents: any[], config: any) {
       return response;
     } catch (error: any) {
       const msg = error?.message?.toLowerCase() || String(error).toLowerCase();
+      
+      // Handle Rate Limits (429) by waiting
+      if (msg.includes('429') && !msg.includes('quota')) {
+        if (retryCount < MAX_RETRIES) {
+          retryCount++;
+          const waitTime = 30; // seconds
+          if (onUpdate && currentModelMessage) {
+            currentModelMessage.text += `\n\n*Atingimos o limite de requisições por minuto. Aguardando ${waitTime} segundos para continuar (Tentativa ${retryCount}/${MAX_RETRIES})...*`;
+            onUpdate({ ...currentModelMessage });
+          }
+          await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+          continue; // Retry with the same model
+        }
+      }
+
       if (
-        msg.includes('429') || 
         msg.includes('quota') || 
         msg.includes('exhausted') || 
         msg.includes('limit') ||
         msg.includes('503') ||
         msg.includes('unavailable') ||
-        msg.includes('high demand')
+        msg.includes('high demand') ||
+        msg.includes('429') // If it's a 429 and we exhausted retries, move to next model
       ) {
         console.warn(`Model ${MODELS[currentModelIndex]} hit quota limit or is unavailable. Switching to next model.`);
         currentModelIndex++;
+        retryCount = 0; // Reset retries for the new model
         if (currentModelIndex >= MODELS.length) {
           throw new Error("Todos os modelos de fallback estão indisponíveis ou esgotaram sua cota diária.");
         }
@@ -102,6 +121,15 @@ export async function sendMessage(
 Você tem acesso total ao vault do Obsidian do usuário.
 O usuário pedirá para você criar ou modificar notas (personagens, locais, eventos, etc.).
 Se o usuário enviar uma imagem, analise-a detalhadamente e use as informações visuais para ajudar na criação de mundo, descrições de personagens, locais, ou o que o usuário solicitar.
+
+CRÍTICO SOBRE TAREFAS LONGAS (MÚLTIPLAS NOTAS):
+Se o usuário pedir para criar ou modificar muitas notas (ex: 5, 10 ou mais), você DEVE processar todas elas.
+Para evitar limites de tamanho de resposta e garantir que tudo seja feito:
+1. Planeje todas as notas que precisam ser criadas/modificadas.
+2. Chame a ferramenta \`writeNote\` para um lote de notas (ex: 2 a 4 notas por vez).
+3. Após receber o resultado de sucesso dessas chamadas (o sistema enviará automaticamente), na sua resposta seguinte, chame \`writeNote\` para o próximo lote.
+4. Repita esse ciclo (chamada de ferramenta -> resposta do sistema -> chamada de ferramenta) até que TODAS as notas solicitadas tenham sido concluídas.
+5. Apenas diga que terminou e encerre as chamadas de ferramenta quando a última nota tiver sido criada. Mantenha o contexto do pedido inicial até o fim.
 
 CRÍTICO SOBRE PROPRIEDADES (YAML FRONTMATTER):
 Quando você criar links para outras notas dentro do frontmatter (properties) no topo do arquivo, você DEVE formatá-los corretamente para o Obsidian.
@@ -164,7 +192,7 @@ ${vault.files.join('\n')}
       systemInstruction,
       tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
       temperature: 0.7,
-    });
+    }, onUpdate, { role: 'model', text: '' });
 
     let modelResponseText = response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text || '';
     let currentModelMessage: Message = { role: 'model', text: modelResponseText };
@@ -213,7 +241,7 @@ ${vault.files.join('\n')}
         systemInstruction,
         tools: [{ functionDeclarations: [writeNoteDeclaration, readNoteDeclaration] }],
         temperature: 0.7,
-      });
+      }, onUpdate, currentModelMessage);
 
       const newText = response.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
       if (newText) {
